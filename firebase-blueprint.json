@@ -1,0 +1,130 @@
+{
+  "entities": {
+    "User": {
+      "title": "Police Officer User",
+      "description": "Police officer personnel account and credentials in Si Songkhram Police Station",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "callsign": { "type": "string" },
+        "rank": { "type": "string" },
+        "fullName": { "type": "string" },
+        "position": { "type": "string" },
+        "department": { "type": "string" },
+        "subDepartment": { "type": "string" },
+        "role": { "type": "string", "enum": ["personnel", "supervisor", "inspector", "approver", "admin", "superintendent"] },
+        "accumulatedVacationDays": { "type": "number" },
+        "currentYearVacationQuota": { "type": "number" },
+        "usedVacationDays": { "type": "number" },
+        "phone": { "type": "string" },
+        "isFirstLogin": { "type": "boolean" },
+        "failedLoginAttempts": { "type": "number" },
+        "isLocked": { "type": "boolean" }
+      },
+      "required": ["id", "callsign", "rank", "fullName", "role"]
+    },
+    "LeaveRequest": {
+      "title": "Leave Request",
+      "description": "Official police leave application submitted by an officer",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "leaveNumber": { "type": "string" },
+        "fiscalYear": { "type": "number" },
+        "userId": { "type": "string" },
+        "userCallsign": { "type": "string" },
+        "userRank": { "type": "string" },
+        "userFullName": { "type": "string" },
+        "userPosition": { "type": "string" },
+        "department": { "type": "string" },
+        "subDepartment": { "type": "string" },
+        "leaveType": { "type": "string" },
+        "startDate": { "type": "string" },
+        "endDate": { "type": "string" },
+        "totalDays": { "type": "number" },
+        "timeSlot": { "type": "string" },
+        "reason": { "type": "string" },
+        "contactAddress": { "type": "string" },
+        "contactPhone": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending_supervisor", "pending_inspector", "pending_approver", "pending_superintendent", "pending_inspection", "pending_approval", "approved", "rejected", "revision", "cancelled"] },
+        "supervisorComment": { "type": "string" },
+        "supervisorName": { "type": "string" },
+        "supervisorDate": { "type": "string" },
+        "inspectorComment": { "type": "string" },
+        "inspectorName": { "type": "string" },
+        "inspectorDate": { "type": "string" },
+        "designatedApproverComment": { "type": "string" },
+        "designatedApproverName": { "type": "string" },
+        "designatedApproverDate": { "type": "string" },
+        "superintendentComment": { "type": "string" },
+        "superintendentName": { "type": "string" },
+        "superintendentDate": { "type": "string" },
+        "approverDecision": { "type": "string" },
+        "approverReason": { "type": "string" },
+        "approverName": { "type": "string" },
+        "approverPosition": { "type": "string" },
+        "approverDate": { "type": "string" },
+        "submittedAt": { "type": "string" },
+        "dutyDepartmentText": { "type": "string" },
+        "dutyTotalStaff": { "type": "number" },
+        "dutyLeaveStaff": { "type": "number" },
+        "dutyRemainingStaff": { "type": "number" }
+      },
+      "required": ["id", "leaveNumber", "fiscalYear", "userId", "leaveType", "startDate", "endDate", "totalDays", "status", "submittedAt"]
+    },
+    "StationConfig": {
+      "title": "Station Configuration",
+      "description": "Station level configuration and superintendent details",
+      "type": "object",
+      "properties": {
+        "stationName": { "type": "string" },
+        "province": { "type": "string" },
+        "region": { "type": "string" },
+        "superintendentName": { "type": "string" },
+        "superintendentRank": { "type": "string" },
+        "inspectorName": { "type": "string" },
+        "inspectorRank": { "type": "string" },
+        "provincialCommanderName": { "type": "string" },
+        "provincialCommanderRank": { "type": "string" },
+        "stationPhone": { "type": "string" },
+        "dutyStaff": { "type": "number" },
+        "leaveStaff": { "type": "number" },
+        "remainingStaff": { "type": "number" }
+      },
+      "required": ["stationName", "superintendentName"]
+    },
+    "AuditLog": {
+      "title": "Audit Log",
+      "description": "System event audit trail for police accountability",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "timestamp": { "type": "string" },
+        "userId": { "type": "string" },
+        "userCallsign": { "type": "string" },
+        "userName": { "type": "string" },
+        "action": { "type": "string" },
+        "details": { "type": "string" }
+      },
+      "required": ["id", "timestamp", "action", "details"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "#/entities/User",
+      "description": "Collection of police officer accounts"
+    },
+    "/leaveRequests/{leaveId}": {
+      "schema": "#/entities/LeaveRequest",
+      "description": "Collection of leave requests"
+    },
+    "/stationConfig/{configId}": {
+      "schema": "#/entities/StationConfig",
+      "description": "Police station configuration document"
+    },
+    "/auditLogs/{logId}": {
+      "schema": "#/entities/AuditLog",
+      "description": "Audit trail log records"
+    }
+  }
+}

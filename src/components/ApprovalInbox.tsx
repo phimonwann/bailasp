@@ -34,6 +34,10 @@ export const ApprovalInbox: React.FC<ApprovalInboxProps> = ({ onSelectLeave }) =
     rejectLeaveRequest, 
     returnForRevision, 
     cancelLeaveRequest,
+    approveSupervisorStep,
+    approveInspectorStep,
+    approveDesignatedStep,
+    approveSuperintendentStep,
     stationConfig,
     users 
   } = useApp();
@@ -61,7 +65,15 @@ export const ApprovalInbox: React.FC<ApprovalInboxProps> = ({ onSelectLeave }) =
   const filteredRequests = leaveRequests.filter((lr) => {
     // Status filter
     if (statusFilter === 'pending') {
-      if (lr.status !== 'pending_approval' && lr.status !== 'pending_inspection' && lr.status !== 'revision') {
+      if (
+        lr.status !== 'pending_supervisor' &&
+        lr.status !== 'pending_inspector' &&
+        lr.status !== 'pending_approver' &&
+        lr.status !== 'pending_superintendent' &&
+        lr.status !== 'pending_approval' && 
+        lr.status !== 'pending_inspection' && 
+        lr.status !== 'revision'
+      ) {
         return false;
       }
     } else if (statusFilter === 'approved' && lr.status !== 'approved') {
@@ -120,16 +132,47 @@ export const ApprovalInbox: React.FC<ApprovalInboxProps> = ({ onSelectLeave }) =
     }
   };
 
+  // 7-Stage Workflow Badge
   const getStatusBadge = (status: LeaveStatus) => {
     switch (status) {
+      case 'pending_supervisor':
+        return (
+          <span className="px-2.5 py-1 bg-amber-100 text-amber-900 border border-amber-300 rounded text-xs font-bold inline-flex items-center gap-1">
+            <span className="w-1.5 h-1.5 rounded-full bg-amber-600 animate-pulse" />
+            ขั้นตอน 2/7: รอหัวหน้างานตรวจ
+          </span>
+        );
+      case 'pending_inspector':
+      case 'pending_inspection':
+        return (
+          <span className="px-2.5 py-1 bg-blue-100 text-blue-900 border border-blue-300 rounded text-xs font-bold inline-flex items-center gap-1">
+            <span className="w-1.5 h-1.5 rounded-full bg-blue-600 animate-pulse" />
+            ขั้นตอน 3/7: รอตรวจเอกสาร
+          </span>
+        );
+      case 'pending_approver':
+      case 'pending_approval':
+        return (
+          <span className="px-2.5 py-1 bg-indigo-100 text-indigo-900 border border-indigo-300 rounded text-xs font-bold inline-flex items-center gap-1">
+            <span className="w-1.5 h-1.5 rounded-full bg-indigo-600 animate-pulse" />
+            ขั้นตอน 4/7: รอผู้มีอำนาจอนุมัติ (รอง ผกก.)
+          </span>
+        );
+      case 'pending_superintendent':
+        return (
+          <span className="px-2.5 py-1 bg-purple-100 text-purple-900 border border-purple-300 rounded text-xs font-bold inline-flex items-center gap-1">
+            <span className="w-1.5 h-1.5 rounded-full bg-purple-600 animate-pulse" />
+            ขั้นตอน 5/7: รอคำสั่ง ผกก.
+          </span>
+        );
       case 'approved':
-        return <span className="px-2.5 py-1 bg-emerald-100 text-emerald-800 border border-emerald-300 rounded text-xs font-bold">✓ อนุมัติแล้ว</span>;
+        return (
+          <span className="px-2.5 py-1 bg-emerald-100 text-emerald-900 border border-emerald-300 rounded text-xs font-bold inline-flex items-center gap-1">
+            ✓ ขั้นตอน 6-7: อนุมัติสมบูรณ์ (บันทึก+แจ้งเตือนแล้ว)
+          </span>
+        );
       case 'rejected':
         return <span className="px-2.5 py-1 bg-rose-100 text-rose-800 border border-rose-300 rounded text-xs font-bold">✕ ไม่อนุมัติ</span>;
-      case 'pending_approval':
-        return <span className="px-2.5 py-1 bg-amber-100 text-amber-800 border border-amber-300 rounded text-xs font-bold">⏳ รออนุมัติ</span>;
-      case 'pending_inspection':
-        return <span className="px-2.5 py-1 bg-blue-100 text-blue-800 border border-blue-300 rounded text-xs font-bold">📋 รอตรวจเอกสาร</span>;
       case 'revision':
         return <span className="px-2.5 py-1 bg-purple-100 text-purple-800 border border-purple-300 rounded text-xs font-bold">⚠️ ส่งกลับแก้ไข</span>;
       case 'cancelled':
@@ -317,6 +360,32 @@ export const ApprovalInbox: React.FC<ApprovalInboxProps> = ({ onSelectLeave }) =
                         <span>เอกสารแนบ: {req.attachmentName}</span>
                       </div>
                     )}
+
+                    {/* 7-Stage Workflow Progress Stepper */}
+                    <div className="mt-3 pt-2.5 border-t border-slate-100 flex items-center gap-1.5 overflow-x-auto text-[10px] pb-1">
+                      {[
+                        { step: 1, label: '1. ยื่นใบลา', done: true },
+                        { step: 2, label: '2. หน.งานตรวจ', done: req.status !== 'pending_supervisor' && req.status !== 'revision', active: req.status === 'pending_supervisor' },
+                        { step: 3, label: '3. ตรวจเอกสาร', done: req.status === 'pending_approver' || req.status === 'pending_superintendent' || req.status === 'approved', active: req.status === 'pending_inspector' || req.status === 'pending_inspection' },
+                        { step: 4, label: '4. มีอำนาจอนุมัติ', done: req.status === 'pending_superintendent' || req.status === 'approved', active: req.status === 'pending_approver' || req.status === 'pending_approval' },
+                        { step: 5, label: '5. คำสั่ง ผกก.', done: req.status === 'approved', active: req.status === 'pending_superintendent' },
+                        { step: 6, label: '6. อนุมัติสมบูรณ์', done: req.status === 'approved', active: false },
+                        { step: 7, label: '7. บันทึก+แจ้งเตือน', done: req.status === 'approved', active: false },
+                      ].map((s, idx) => (
+                        <div key={idx} className="flex items-center gap-1 shrink-0">
+                          <span className={`px-2 py-0.5 rounded-full font-semibold flex items-center gap-0.5 ${
+                            s.done 
+                              ? 'bg-emerald-100 text-emerald-800' 
+                              : s.active 
+                              ? 'bg-amber-100 text-amber-900 border border-amber-400 font-extrabold animate-pulse' 
+                              : 'bg-slate-100 text-slate-400'
+                          }`}>
+                            {s.done ? '✓' : ''} {s.label}
+                          </span>
+                          {idx < 6 && <span className="text-slate-300">→</span>}
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 </div>
 
@@ -336,16 +405,63 @@ export const ApprovalInbox: React.FC<ApprovalInboxProps> = ({ onSelectLeave }) =
                     <span className="hidden sm:inline">ดูใบลา</span>
                   </button>
 
-                  {/* Approval Actions (for Approver/Superintendent/Admin) */}
+                  {/* 7-Stage Approval Actions */}
                   {req.status !== 'approved' && req.status !== 'cancelled' && canApprove && (
                     <>
-                      <button
-                        onClick={() => handleApprove(req.id)}
-                        className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs flex items-center gap-1.5 cursor-pointer"
-                      >
-                        <CheckCircle2 className="w-4 h-4" />
-                        อนุมัติ
-                      </button>
+                      {/* Step 2 action: Supervisor review */}
+                      {req.status === 'pending_supervisor' && (
+                        <button
+                          onClick={() => approveSupervisorStep(req.id)}
+                          className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs flex items-center gap-1.5 cursor-pointer"
+                        >
+                          <CheckCircle2 className="w-4 h-4" />
+                          <span>หน.งานเห็นชอบ (ส่งขั้น 3)</span>
+                        </button>
+                      )}
+
+                      {/* Step 3 action: Inspector review */}
+                      {(req.status === 'pending_inspector' || req.status === 'pending_inspection') && (
+                        <button
+                          onClick={() => approveInspectorStep(req.id)}
+                          className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs flex items-center gap-1.5 cursor-pointer"
+                        >
+                          <CheckCircle2 className="w-4 h-4" />
+                          <span>ตรวจเอกสารผ่าน (ส่งขั้น 4)</span>
+                        </button>
+                      )}
+
+                      {/* Step 4 action: Designated approver review */}
+                      {(req.status === 'pending_approver' || req.status === 'pending_approval') && (
+                        <button
+                          onClick={() => approveDesignatedStep(req.id)}
+                          className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs flex items-center gap-1.5 cursor-pointer"
+                        >
+                          <CheckCircle2 className="w-4 h-4" />
+                          <span>ผู้มีอำนาจเห็นชอบ (เสนอ ผกก. ขั้น 5)</span>
+                        </button>
+                      )}
+
+                      {/* Step 5 action: Superintendent final order */}
+                      {req.status === 'pending_superintendent' && (
+                        <button
+                          onClick={() => approveSuperintendentStep(req.id)}
+                          className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs flex items-center gap-1.5 cursor-pointer"
+                        >
+                          <CheckCircle2 className="w-4 h-4" />
+                          <span>คำสั่ง ผกก. อนุญาต (ขั้น 6-7 อนุมัติสมบูรณ์)</span>
+                        </button>
+                      )}
+
+                      {/* Admin / Superintendent Fast-track button */}
+                      {(currentUser?.role === 'admin' || currentUser?.role === 'superintendent') && req.status !== 'pending_superintendent' && (
+                        <button
+                          onClick={() => handleApprove(req.id)}
+                          className="px-2.5 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-xl text-xs font-bold transition-all flex items-center gap-1 cursor-pointer"
+                          title="อนุมัติผ่านทุกขั้นตอนทันที (Fast Track)"
+                        >
+                          <span>⚡ อนุมัติทันที</span>
+                        </button>
+                      )}
 
                       <button
                         onClick={() => {

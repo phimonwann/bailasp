@@ -212,12 +212,16 @@ export const LEAVE_TYPES: Record<LeaveType, LeaveTypeInfo> = {
 };
 
 export type LeaveStatus = 
-  | 'pending_inspection'  // รอตรวจสอบเอกสาร
-  | 'pending_approval'    // รออนุมัติ
-  | 'approved'            // อนุมัติแล้ว
-  | 'rejected'            // ไม่อนุมัติ
-  | 'revision'            // ส่งกลับแก้ไข
-  | 'cancelled';          // ยกเลิกคำขอ
+  | 'pending_supervisor'     // ขั้นที่ 1-2: บุคลากรยื่นใบลา -> รอหัวหน้างานตรวจสอบ
+  | 'pending_inspector'      // ขั้นที่ 3: รอผู้ตรวจสอบเอกสาร (สว.อก./ธุรการกำลังพล)
+  | 'pending_approver'       // ขั้นที่ 4: รอผู้มีอำนาจอนุมัติ (รอง ผกก.)
+  | 'pending_superintendent' // ขั้นที่ 5: รอคำสั่ง ผู้กำกับการ / ผู้อนุมัติที่กำหนด
+  | 'approved'               // ขั้นที่ 6-7: อนุมัติสมบูรณ์ (บันทึกประวัติ + แจ้งเตือน)
+  | 'rejected'               // ไม่อนุมัติ
+  | 'revision'               // ส่งกลับแก้ไข
+  | 'cancelled'              // ยกเลิกคำขอ
+  | 'pending_inspection'     // alias for pending_inspector
+  | 'pending_approval';      // alias for pending_approver
 
 export type TimeSlot = 'full' | 'morning' | 'afternoon';
 
@@ -294,15 +298,28 @@ export interface LeaveRequest {
   status: LeaveStatus;
   submittedAt: string;        // ISO Timestamp
   
-  // Approval steps & timeline
+  // 7-Stage Approval Workflow details
+  // ขั้นที่ 2: หัวหน้างานตรวจสอบ
   supervisorComment?: string;
   supervisorName?: string;
   supervisorDate?: string;
   
+  // ขั้นที่ 3: ผู้ตรวจสอบเอกสาร
   inspectorComment?: string;
   inspectorName?: string;
   inspectorDate?: string;
   
+  // ขั้นที่ 4: ผู้มีอำนาจอนุมัติ (รอง ผกก.)
+  designatedApproverComment?: string;
+  designatedApproverName?: string;
+  designatedApproverDate?: string;
+  
+  // ขั้นที่ 5: ผู้กำกับการ / ผู้อนุมัติที่กำหนด
+  superintendentComment?: string;
+  superintendentName?: string;
+  superintendentDate?: string;
+  
+  // ขั้นที่ 6-7: คำสั่งอนุมัติขั้นสุดท้าย และบันทึกประวัติ
   approverDecision?: 'approved' | 'rejected' | 'revision';
   approverReason?: string;
   approverName?: string;

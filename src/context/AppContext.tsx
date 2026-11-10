@@ -24,6 +24,19 @@ import {
   OFFICIAL_HOLIDAYS_DEFAULT,
   INITIAL_DAILY_DUTY,
 } from '../data/initialData';
+import {
+  testConnection,
+  seedInitialFirestoreData,
+  subscribeToUsers,
+  subscribeToLeaves,
+  subscribeToStationConfig,
+  firestoreSaveLeave,
+  firestoreUpdateLeave,
+  firestoreSaveUser,
+  firestoreDeleteUser,
+  firestoreSaveStationConfig,
+  firestoreSaveAuditLog,
+} from '../services/firebase';
 
 export interface NotificationItem {
   id: string;
@@ -47,6 +60,7 @@ interface AppContextType {
   unreadNotificationCount: number;
   currentFiscalYear: number;
   availableFiscalYears: number[];
+  isFirebaseConnected: boolean;
   
   // Auth methods
   login: (credential: string, password: string) => { success: boolean; message?: string; requirePasswordChange?: boolean };
@@ -68,6 +82,12 @@ interface AppContextType {
   approveLeaveRequest: (leaveId: string, note?: string) => boolean;
   rejectLeaveRequest: (leaveId: string, reason: string) => boolean;
   returnForRevision: (leaveId: string, note: string) => boolean;
+  
+  // 7-Stage Approval Workflow methods (Specification #1 to #7)
+  approveSupervisorStep: (leaveId: string, comment?: string) => boolean;
+  approveInspectorStep: (leaveId: string, comment?: string) => boolean;
+  approveDesignatedStep: (leaveId: string, comment?: string) => boolean;
+  approveSuperintendentStep: (leaveId: string, comment?: string) => boolean;
   
   // Station Config & Management
   updateStationConfig: (config: Partial<StationConfig>) => void;
@@ -195,25 +215,64 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     },
   ]);
 
-  // Current logged in user (Default to admin or SSK503 for demo ease)
-  const [currentUser, setCurrentUser] = useState<User | null>(() => {
-    try {
-      const savedId = localStorage.getItem(`${STORAGE_KEY_PREFIX}current_user_id`);
-      if (savedId) {
-        const found = users.find(u => u.id === savedId);
-        if (found) return found;
-      }
-    } catch {
-      // ignore
-    }
-    // Default to admin user so user can see all features immediately
-    return users.find(u => u.role === 'admin') || users[0];
-  });
+  // User Requirement: ทุกครั้งที่กดเข้าลิ้ง ให้ขึ้นหน้าเข้าสู่ระบบเป็นลำดับแรก
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
 
   const [currentFiscalYear, setCurrentFiscalYear] = useState<number>(stationConfig.currentFiscalYear || 2568);
 
   // Available fiscal years from 2568 to 2580 as requested in #4
   const availableFiscalYears = Array.from({ length: 2580 - 2568 + 1 }, (_, i) => 2568 + i);
+
+  const [isFirebaseConnected, setIsFirebaseConnected] = useState<boolean>(false);
+
+  // Initialize and synchronize with Firebase Cloud Firestore
+  useEffect(() => {
+    let unsubUsers: (() => void) | undefined;
+    let unsubLeaves: (() => void) | undefined;
+    let unsubConfig: (() => void) | undefined;
+
+    async function initFirestoreSync() {
+      try {
+        const connected = await testConnection();
+        setIsFirebaseConnected(connected);
+
+        // Seed initial collections in Firestore if empty
+        await seedInitialFirestoreData(INITIAL_USERS, INITIAL_LEAVE_REQUESTS, INITIAL_STATION_CONFIG);
+
+        // Real-time synchronization
+        unsubUsers = subscribeToUsers((firestoreUsers) => {
+          if (firestoreUsers && firestoreUsers.length > 0) {
+            setUsers(firestoreUsers);
+            setIsFirebaseConnected(true);
+          }
+        });
+
+        unsubLeaves = subscribeToLeaves((firestoreLeaves) => {
+          if (firestoreLeaves && firestoreLeaves.length > 0) {
+            setLeaveRequests(firestoreLeaves);
+            setIsFirebaseConnected(true);
+          }
+        });
+
+        unsubConfig = subscribeToStationConfig((firestoreConfig) => {
+          if (firestoreConfig) {
+            setStationConfig(prev => ({ ...prev, ...firestoreConfig }));
+            setIsFirebaseConnected(true);
+          }
+        });
+      } catch (err) {
+        console.warn('[Firebase] Sync fallback to local storage:', err);
+      }
+    }
+
+    initFirestoreSync();
+
+    return () => {
+      if (unsubUsers) unsubUsers();
+      if (unsubLeaves) unsubLeaves();
+      if (unsubConfig) unsubConfig();
+    };
+  }, []);
 
   // Persist state updates to localStorage
   useEffect(() => {
@@ -286,6 +345,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       details,
     };
     setAuditLogs(prev => [newLog, ...prev.slice(0, 199)]);
+    firestoreSaveAuditLog(newLog).catch(err => console.warn('[Firebase] save audit error:', err));
   }, [currentUser]);
 
   // Login handler
@@ -319,12 +379,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       const attempts = (targetUser.failedAttempts || 0) + 1;
       const isNowLocked = attempts >= 5;
 
-      setUsers(prev => prev.map(u => {
-        if (u.id === targetUser.id) {
-          return { ...u, failedAttempts: attempts, isLocked: isNowLocked };
-        }
-        return u;
-      }));
+      const updatedUser = { ...targetUser, failedAttempts: attempts, isLocked: isNowLocked };
+      setUsers(prev => prev.map(u => u.id === targetUser.id ? updatedUser : u));
+      firestoreSaveUser(updatedUser).catch(err => console.warn('[Firebase] save user failed attempts:', err));
 
       addAuditLog('login', 'personnel', targetUser.id, `เข้าสู่ระบบไม่สำเร็จ (รหัสผ่านไม่ถูกต้อง ครั้งที่ ${attempts})`);
 
@@ -337,6 +394,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     // Login successful
     const updatedUser = { ...targetUser, failedAttempts: 0 };
     setUsers(prev => prev.map(u => u.id === targetUser.id ? updatedUser : u));
+    firestoreSaveUser(updatedUser).catch(err => console.warn('[Firebase] save user login:', err));
     setCurrentUser(updatedUser);
     addAuditLog('login', 'personnel', targetUser.id, `เข้าสู่ระบบสำเร็จ โดยนามเรียกขาน ${targetUser.callsign}`);
 
@@ -370,6 +428,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     };
     setCurrentUser(updated);
     setUsers(prev => prev.map(u => u.id === currentUser.id ? updated : u));
+    firestoreSaveUser(updated).catch(err => console.warn('[Firebase] save password change:', err));
     addAuditLog('edit', 'personnel', currentUser.id, 'เปลี่ยนรหัสผ่านส่วนตัว');
     return true;
   };
@@ -386,6 +445,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       isFirstLogin: true,
     };
     setUsers(prev => prev.map(u => u.id === userId ? updated : u));
+    firestoreSaveUser(updated).catch(err => console.warn('[Firebase] reset user password:', err));
     if (currentUser?.id === userId) {
       setCurrentUser(updated);
     }
@@ -396,7 +456,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const adminUnlockAccount = (userId: string) => {
     setUsers(prev => prev.map(u => {
       if (u.id === userId) {
-        return { ...u, isLocked: false, failedAttempts: 0 };
+        const unlocked = { ...u, isLocked: false, failedAttempts: 0 };
+        firestoreSaveUser(unlocked).catch(err => console.warn('[Firebase] unlock account:', err));
+        return unlocked;
       }
       return u;
     }));
@@ -414,11 +476,13 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       failedAttempts: 0,
     };
     setUsers(prev => [...prev, newUser]);
+    firestoreSaveUser(newUser).catch(err => console.warn('[Firebase] add user error:', err));
     addAuditLog('create', 'personnel', newId, `เพิ่มบุคลากรใหม่: ${newUser.rank} ${newUser.firstName} ${newUser.lastName} (${newUser.callsign})`);
   };
 
   const updatePersonnel = (updatedUser: User) => {
     setUsers(prev => prev.map(u => u.id === updatedUser.id ? updatedUser : u));
+    firestoreSaveUser(updatedUser).catch(err => console.warn('[Firebase] update user error:', err));
     if (currentUser?.id === updatedUser.id) {
       setCurrentUser(updatedUser);
     }
@@ -428,6 +492,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const deletePersonnel = (userId: string) => {
     const target = users.find(u => u.id === userId);
     setUsers(prev => prev.filter(u => u.id !== userId));
+    firestoreDeleteUser(userId).catch(err => console.warn('[Firebase] delete user error:', err));
     addAuditLog('delete', 'personnel', userId, `ลบบุคลากร: ${target?.rank || ''} ${target?.firstName || ''} ${target?.lastName || ''}`);
   };
 
@@ -595,13 +660,14 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       dutyTotalStaff: data.dutyTotalStaff ?? 4,
       dutyLeaveStaff: data.dutyLeaveStaff ?? 1,
       dutyRemainingStaff: data.dutyRemainingStaff ?? ((data.dutyTotalStaff ?? 4) - (data.dutyLeaveStaff ?? 1)),
-      status: 'pending_inspection', // Step 1: รอตรวจสอบเอกสาร
+      status: 'pending_supervisor', // ขั้นที่ 1: บุคลากรยื่นใบลา -> ขั้นที่ 2: รอหัวหน้างานตรวจสอบ
       submittedAt: new Date().toISOString(),
       isRetroactive: data.isRetroactive,
       retroactiveReason: data.retroactiveReason,
     };
 
     setLeaveRequests(prev => [newRequest, ...prev]);
+    firestoreSaveLeave(newRequest).catch(err => console.warn('[Firebase] save leave error:', err));
 
     // Send notification to approvers/inspectors
     const newNotif: NotificationItem = {
@@ -624,6 +690,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     setLeaveRequests(prev => prev.map(lr => {
       if (lr.id === leaveId) {
         const updated = { ...lr, ...data };
+        firestoreUpdateLeave(leaveId, data).catch(err => console.warn('[Firebase] update leave error:', err));
         addAuditLog('edit', 'leave_request', leaveId, `แก้ไขรายละเอียดใบลาเลขที่ ${lr.leaveNumber}`);
         return updated;
       }
@@ -636,30 +703,38 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const target = leaveRequests.find(l => l.id === leaveId);
     if (!target) return false;
 
+    const cancelUpdate = {
+      status: 'cancelled' as LeaveStatus,
+      cancelledAt: new Date().toISOString(),
+      cancelledBy: currentUser ? `${currentUser.rank} ${currentUser.firstName} ${currentUser.lastName}` : 'ผู้ใช้งาน',
+      cancellationReason: reason,
+    };
+
     setLeaveRequests(prev => prev.map(lr => {
       if (lr.id === leaveId) {
         return {
           ...lr,
-          status: 'cancelled',
-          cancelledAt: new Date().toISOString(),
-          cancelledBy: currentUser ? `${currentUser.rank} ${currentUser.firstName} ${currentUser.lastName}` : 'ผู้ใช้งาน',
-          cancellationReason: reason,
+          ...cancelUpdate,
         };
       }
       return lr;
     }));
+    firestoreUpdateLeave(leaveId, cancelUpdate).catch(err => console.warn('[Firebase] cancel leave error:', err));
 
     // If was approved, refund user used days
     if (target.status === 'approved') {
       setUsers(prev => prev.map(u => {
         if (u.id === target.userId) {
+          let updatedUser = u;
           if (target.leaveType === 'vacation') {
-            return { ...u, usedVacationDays: Math.max(0, u.usedVacationDays - target.totalDays) };
+            updatedUser = { ...u, usedVacationDays: Math.max(0, u.usedVacationDays - target.totalDays) };
           } else if (target.leaveType === 'sick') {
-            return { ...u, usedSickDays: Math.max(0, u.usedSickDays - target.totalDays) };
+            updatedUser = { ...u, usedSickDays: Math.max(0, u.usedSickDays - target.totalDays) };
           } else if (target.leaveType === 'personal') {
-            return { ...u, usedPersonalDays: Math.max(0, u.usedPersonalDays - target.totalDays) };
+            updatedUser = { ...u, usedPersonalDays: Math.max(0, u.usedPersonalDays - target.totalDays) };
           }
+          firestoreSaveUser(updatedUser).catch(err => console.warn('[Firebase] refund leave user balance:', err));
+          return updatedUser;
         }
         return u;
       }));
@@ -694,40 +769,51 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
     const approverPosition = currentUser?.position || `ผกก.${stationConfig.stationName}`;
 
+    const approveUpdate = {
+      status: 'approved' as LeaveStatus,
+      approverDecision: 'approved' as const,
+      approverReason: note || 'อนุมัติเรียบร้อยตามระเบียบ',
+      approverName,
+      approverPosition,
+      approverDate: new Date().toISOString().split('T')[0],
+      superintendentName: approverName,
+      superintendentComment: note || 'อนุมัติตามเสนอ',
+      superintendentDate: new Date().toISOString().split('T')[0],
+    };
+
     setLeaveRequests(prev => prev.map(lr => {
       if (lr.id === leaveId) {
         return {
           ...lr,
-          status: 'approved',
-          approverDecision: 'approved',
-          approverReason: note || 'อนุมัติเรียบร้อยตามระเบียบ',
-          approverName,
-          approverPosition,
-          approverDate: new Date().toISOString().split('T')[0],
+          ...approveUpdate,
         };
       }
       return lr;
     }));
+    firestoreUpdateLeave(leaveId, approveUpdate).catch(err => console.warn('[Firebase] approve leave error:', err));
 
     // Deduct user leave balance
     setUsers(prev => prev.map(u => {
       if (u.id === target.userId) {
+        let updatedUser = u;
         if (target.leaveType === 'vacation') {
-          return { ...u, usedVacationDays: u.usedVacationDays + target.totalDays };
+          updatedUser = { ...u, usedVacationDays: u.usedVacationDays + target.totalDays };
         } else if (target.leaveType === 'sick') {
-          return { ...u, usedSickDays: u.usedSickDays + target.totalDays };
+          updatedUser = { ...u, usedSickDays: u.usedSickDays + target.totalDays };
         } else if (target.leaveType === 'personal') {
-          return { ...u, usedPersonalDays: u.usedPersonalDays + target.totalDays };
+          updatedUser = { ...u, usedPersonalDays: u.usedPersonalDays + target.totalDays };
         }
+        firestoreSaveUser(updatedUser).catch(err => console.warn('[Firebase] deduct user quota error:', err));
+        return updatedUser;
       }
       return u;
     }));
 
-    // Notification to requester
+    // Notification to requester (Stage 7: บันทึกประวัติ + แจ้งเตือน)
     const notif: NotificationItem = {
       id: `notif-${Date.now()}`,
-      title: 'ใบลาได้รับการอนุมัติแล้ว 🎉',
-      message: `ใบลาเลขที่ ${target.leaveNumber} (${LEAVE_TYPES[target.leaveType].title} ${target.totalDays} วัน) ได้รับการอนุมัติแล้ว`,
+      title: 'ใบลาได้รับการอนุมัติสมบูรณ์แล้ว 🎉',
+      message: `ใบลาเลขที่ ${target.leaveNumber} (${LEAVE_TYPES[target.leaveType].title} ${target.totalDays} วัน) ได้รับการอนุมัติสมบูรณ์แล้ว`,
       timestamp: new Date().toISOString(),
       read: false,
       leaveRequestId: target.id,
@@ -735,8 +821,112 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     };
     setNotifications(prev => [notif, ...prev]);
 
-    addAuditLog('approve', 'leave_request', leaveId, `อนุมัติใบลาเลขที่ ${target.leaveNumber} โดย ${approverName}`);
+    addAuditLog('approve', 'leave_request', leaveId, `อนุมัติคำขอลา ${target.leaveNumber} สมบูรณ์ (ขั้นตอน 6-7) โดย ${approverName}`);
     return true;
+  };
+
+  // ขั้นที่ 2: หัวหน้างานตรวจสอบ
+  const approveSupervisorStep = (leaveId: string, comment?: string) => {
+    const target = leaveRequests.find(l => l.id === leaveId);
+    if (!target) return false;
+
+    const supervisorName = currentUser 
+      ? `${currentUser.rank} ${currentUser.firstName} ${currentUser.lastName}`
+      : 'หัวหน้างาน/สารวัตร';
+
+    const updateData = {
+      status: 'pending_inspector' as LeaveStatus,
+      supervisorName,
+      supervisorComment: comment || 'เห็นควรอนุญาตตามระเบียบ ไม่กระทบต่อภารกิจ',
+      supervisorDate: new Date().toISOString().split('T')[0],
+    };
+
+    setLeaveRequests(prev => prev.map(lr => lr.id === leaveId ? { ...lr, ...updateData } : lr));
+    firestoreUpdateLeave(leaveId, updateData).catch(err => console.warn('[Firebase] supervisor step error:', err));
+
+    const notif: NotificationItem = {
+      id: `notif-${Date.now()}`,
+      title: 'ผ่านการตรวจสอบโดยหัวหน้างานแล้ว (ขั้นตอนที่ 2)',
+      message: `ใบลา ${target.leaveNumber} ได้รับความเห็นชอบจากหัวหน้างาน และส่งต่อไปยังผู้ตรวจสอบเอกสาร`,
+      timestamp: new Date().toISOString(),
+      read: false,
+      leaveRequestId: target.id,
+      type: 'system',
+    };
+    setNotifications(prev => [notif, ...prev]);
+    addAuditLog('approve', 'leave_request', leaveId, `หัวหน้างาน (${supervisorName}) ตรวจสอบเห็นชอบใบลา ${target.leaveNumber}`);
+    return true;
+  };
+
+  // ขั้นที่ 3: ผู้ตรวจสอบเอกสาร
+  const approveInspectorStep = (leaveId: string, comment?: string) => {
+    const target = leaveRequests.find(l => l.id === leaveId);
+    if (!target) return false;
+
+    const inspectorName = currentUser 
+      ? `${currentUser.rank} ${currentUser.firstName} ${currentUser.lastName}`
+      : `${stationConfig.inspectorRank} ${stationConfig.inspectorName}`;
+
+    const updateData = {
+      status: 'pending_approver' as LeaveStatus,
+      inspectorName,
+      inspectorComment: comment || 'ตรวจสอบเอกสาร หลักฐาน และสิทธิการลาถูกต้องตามระเบียบ',
+      inspectorDate: new Date().toISOString().split('T')[0],
+    };
+
+    setLeaveRequests(prev => prev.map(lr => lr.id === leaveId ? { ...lr, ...updateData } : lr));
+    firestoreUpdateLeave(leaveId, updateData).catch(err => console.warn('[Firebase] inspector step error:', err));
+
+    const notif: NotificationItem = {
+      id: `notif-${Date.now()}`,
+      title: 'ผ่านการตรวจเอกสารแล้ว (ขั้นตอนที่ 3)',
+      message: `ใบลา ${target.leaveNumber} ผ่านการตรวจสอบเอกสารเรียบร้อย และส่งต่อไปยังผู้มีอำนาจอนุมัติ`,
+      timestamp: new Date().toISOString(),
+      read: false,
+      leaveRequestId: target.id,
+      type: 'system',
+    };
+    setNotifications(prev => [notif, ...prev]);
+    addAuditLog('approve', 'leave_request', leaveId, `ผู้ตรวจสอบเอกสาร (${inspectorName}) รับรองความถูกต้องใบลา ${target.leaveNumber}`);
+    return true;
+  };
+
+  // ขั้นที่ 4: ผู้มีอำนาจอนุมัติ (รอง ผกก.)
+  const approveDesignatedStep = (leaveId: string, comment?: string) => {
+    const target = leaveRequests.find(l => l.id === leaveId);
+    if (!target) return false;
+
+    const designatedName = currentUser 
+      ? `${currentUser.rank} ${currentUser.firstName} ${currentUser.lastName}`
+      : 'รอง ผกก. ผู้มีอำนาจอนุมัติ';
+
+    const updateData = {
+      status: 'pending_superintendent' as LeaveStatus,
+      designatedApproverName: designatedName,
+      designatedApproverComment: comment || 'พิจารณาเห็นชอบ เสนอผู้กำกับการเพื่อโปรดพิจารณาคำสั่ง',
+      designatedApproverDate: new Date().toISOString().split('T')[0],
+    };
+
+    setLeaveRequests(prev => prev.map(lr => lr.id === leaveId ? { ...lr, ...updateData } : lr));
+    firestoreUpdateLeave(leaveId, updateData).catch(err => console.warn('[Firebase] designated step error:', err));
+
+    const notif: NotificationItem = {
+      id: `notif-${Date.now()}`,
+      title: 'ผ่านการพิจารณาของผู้มีอำนาจอนุมัติแล้ว (ขั้นตอนที่ 4)',
+      message: `ใบลา ${target.leaveNumber} ได้รับความเห็นชอบจากผู้มีอำนาจอนุมัติ และเสนอต่อไปยัง ผกก.`,
+      timestamp: new Date().toISOString(),
+      read: false,
+      leaveRequestId: target.id,
+      type: 'system',
+    };
+    setNotifications(prev => [notif, ...prev]);
+    addAuditLog('approve', 'leave_request', leaveId, `ผู้มีอำนาจอนุมัติ (${designatedName}) พิจารณาเห็นชอบใบลา ${target.leaveNumber}`);
+    return true;
+  };
+
+  // ขั้นที่ 5-7: ผู้กำกับ / ผู้อนุมัติที่กำหนด -> อนุมัติสมบูรณ์ -> บันทึกประวัติ + แจ้งเตือน
+  const approveSuperintendentStep = (leaveId: string, comment?: string) => {
+    return approveLeaveRequest(leaveId, comment || 'อนุญาตตามเสนอ');
   };
 
   const rejectLeaveRequest = (leaveId: string, reason: string) => {
@@ -747,20 +937,25 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       ? `${currentUser.rank} ${currentUser.firstName} ${currentUser.lastName}`
       : `${stationConfig.superintendentRank} ${stationConfig.superintendentName}`;
 
+    const rejectUpdate = {
+      status: 'rejected' as LeaveStatus,
+      approverDecision: 'rejected' as const,
+      approverReason: reason,
+      approverName,
+      approverPosition: currentUser?.position || 'ผกก.สภ.ศรีสงคราม',
+      approverDate: new Date().toISOString().split('T')[0],
+    };
+
     setLeaveRequests(prev => prev.map(lr => {
       if (lr.id === leaveId) {
         return {
           ...lr,
-          status: 'rejected',
-          approverDecision: 'rejected',
-          approverReason: reason,
-          approverName,
-          approverPosition: currentUser?.position || 'ผกก.สภ.ศรีสงคราม',
-          approverDate: new Date().toISOString().split('T')[0],
+          ...rejectUpdate,
         };
       }
       return lr;
     }));
+    firestoreUpdateLeave(leaveId, rejectUpdate).catch(err => console.warn('[Firebase] reject leave error:', err));
 
     const notif: NotificationItem = {
       id: `notif-${Date.now()}`,
@@ -781,18 +976,23 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const target = leaveRequests.find(l => l.id === leaveId);
     if (!target) return false;
 
+    const revisionUpdate = {
+      status: 'revision' as LeaveStatus,
+      inspectorComment: note,
+      inspectorName: currentUser ? `${currentUser.rank} ${currentUser.firstName} ${currentUser.lastName}` : 'ผู้ตรวจสอบ',
+      inspectorDate: new Date().toISOString().split('T')[0],
+    };
+
     setLeaveRequests(prev => prev.map(lr => {
       if (lr.id === leaveId) {
         return {
           ...lr,
-          status: 'revision',
-          inspectorComment: note,
-          inspectorName: currentUser ? `${currentUser.rank} ${currentUser.firstName} ${currentUser.lastName}` : 'ผู้ตรวจสอบ',
-          inspectorDate: new Date().toISOString().split('T')[0],
+          ...revisionUpdate,
         };
       }
       return lr;
     }));
+    firestoreUpdateLeave(leaveId, revisionUpdate).catch(err => console.warn('[Firebase] revision leave error:', err));
 
     const notif: NotificationItem = {
       id: `notif-${Date.now()}`,
@@ -813,6 +1013,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const updateStationConfig = (configUpdate: Partial<StationConfig>) => {
     setStationConfig(prev => {
       const updated = { ...prev, ...configUpdate };
+      firestoreSaveStationConfig(updated).catch(err => console.warn('[Firebase] save station config error:', err));
       return updated;
     });
     addAuditLog('config_update', 'station_config', 'cfg', 'แก้ไขการตั้งค่าสถานีตำรวจ / ผู้บังคับบัญชา / เบอร์โทรศัพท์');
@@ -926,6 +1127,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         unreadNotificationCount,
         currentFiscalYear,
         availableFiscalYears,
+        isFirebaseConnected,
         login,
         logout,
         switchUser,
@@ -941,6 +1143,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         approveLeaveRequest,
         rejectLeaveRequest,
         returnForRevision,
+        approveSupervisorStep,
+        approveInspectorStep,
+        approveDesignatedStep,
+        approveSuperintendentStep,
         updateStationConfig,
         updateDailyDuty,
         setCurrentFiscalYear,

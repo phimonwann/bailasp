@@ -37,6 +37,25 @@ const AppContent: React.FC = () => {
   // Mobile sidebar state
   const [isSidebarOpenMobile, setIsSidebarOpenMobile] = useState(false);
 
+  // User Requirement 1: ทุกครั้งที่กดเข้าลิ้ง ให้ขึ้นหน้าเข้าสู่ระบบเป็นลำดับแรก
+  if (!currentUser) {
+    return (
+      <>
+        <LoginModal
+          isOpen={true}
+          isFullPage={true}
+          onClose={() => {}}
+          onRequirePasswordChange={() => setIsPasswordChangeModalOpen(true)}
+        />
+        <ChangePasswordModal
+          isOpen={isPasswordChangeModalOpen}
+          onClose={() => setIsPasswordChangeModalOpen(false)}
+          isFirstLogin={false}
+        />
+      </>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-slate-100 flex flex-col md:flex-row antialiased text-slate-800">
       {/* Sidebar (Responsive desktop sticky, mobile drawer) */}
@@ -81,8 +100,25 @@ const AppContent: React.FC = () => {
               />
             )}
 
+            {/* User Requirement: ข้อมูลบุคลากรให้เห็นเฉพาะแอดมินเท่านั้น */}
             {activeTab === 'personnel' && (
-              <PersonnelManagement />
+              currentUser.role === 'admin' ? (
+                <PersonnelManagement />
+              ) : (
+                <div className="bg-white p-8 rounded-2xl border border-rose-200 text-center space-y-3">
+                  <div className="w-12 h-12 bg-rose-50 text-rose-800 rounded-full flex items-center justify-center mx-auto font-bold text-xl">⚠️</div>
+                  <h3 className="text-base font-bold text-slate-800">ไม่มีสิทธิ์เข้าถึงข้อมูลบุคลากร</h3>
+                  <p className="text-xs text-slate-500 max-w-md mx-auto">
+                    ระบบจำกัดสิทธิ์การดูและแก้ไขข้อมูลบุคลากรเฉพาะผู้ดูแลระบบ (Admin) เท่านั้น
+                  </p>
+                  <button
+                    onClick={() => setActiveTab('dashboard')}
+                    className="px-4 py-2 bg-rose-900 text-white rounded-xl text-xs font-bold cursor-pointer hover:bg-rose-950"
+                  >
+                    กลับสู่หน้าหลัก Dashboard
+                  </button>
+                </div>
+              )
             )}
 
             {activeTab === 'calendar' && (

@@ -50,9 +50,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const { leaveRequests, stationConfig, currentUser } = useApp();
   const { isInstallable, install } = usePWAInstall();
 
-  // Count pending approvals for current user role
+  // Count pending approvals across all 7 stages
   const pendingApprovalsCount = leaveRequests.filter(lr => 
-    lr.status === 'pending_approval' || lr.status === 'pending_inspection'
+    lr.status === 'pending_supervisor' ||
+    lr.status === 'pending_inspector' ||
+    lr.status === 'pending_approver' ||
+    lr.status === 'pending_superintendent' ||
+    lr.status === 'pending_approval' || 
+    lr.status === 'pending_inspection' ||
+    lr.status === 'revision'
   ).length;
 
   const navItems = [
@@ -125,6 +131,23 @@ export const Sidebar: React.FC<SidebarProps> = ({
     },
   ];
 
+  // User Requirement: ข้อมูลบุคลากรให้เห็นเฉพาะแอดมินเท่านั้น และปรับปรุงสิทธิ์ใหม่ให้สมบูรณ์
+  const filteredNavItems = navItems.filter((item) => {
+    // 1. ข้อมูลบุคลากร: ให้เห็นเฉพาะแอดมินเท่านั้น
+    if (item.id === 'personnel' && currentUser?.role !== 'admin') {
+      return false;
+    }
+    // 2. กล่องงานอนุมัติ: ไม่แสดงให้บุคลากรทั่วไป (officer) ที่ไม่มีอำนาจอนุมัติ
+    if (item.id === 'approvals' && currentUser?.role === 'officer') {
+      return false;
+    }
+    // 3. ประวัติการใช้งานระบบ (Audit Logs): เฉพาะ admin และผู้กำกับ
+    if (item.id === 'audit_logs' && currentUser?.role !== 'admin' && currentUser?.role !== 'superintendent') {
+      return false;
+    }
+    return true;
+  });
+
   return (
     <>
       {/* Mobile Backdrop */}
@@ -161,7 +184,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
         {/* Navigation Links */}
         <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-1 custom-scrollbar">
-          {navItems.map((item) => {
+          {filteredNavItems.map((item) => {
             const Icon = item.icon;
             const isActive = activeTab === item.id;
 

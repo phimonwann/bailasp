@@ -45,7 +45,8 @@ export const Header: React.FC<HeaderProps> = ({
     notifications, 
     unreadNotificationCount, 
     markNotificationAsRead, 
-    markAllNotificationsAsRead 
+    markAllNotificationsAsRead,
+    isFirebaseConnected,
   } = useApp();
 
   const [currentTime, setCurrentTime] = useState<Date>(new Date());
@@ -122,13 +123,26 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
         </div>
 
-        {/* Real-time Clock Badge (Requirement #10) */}
-        <div className="flex items-center gap-2 bg-black/25 backdrop-blur-xs px-3 py-1.5 rounded-lg border border-white/10 text-xs sm:text-sm">
-          <CalendarIcon className="w-4 h-4 text-amber-300" />
-          <span className="font-semibold">{thaiTime.dateStr}</span>
-          <span className="text-amber-300/80">|</span>
-          <Clock className="w-4 h-4 text-amber-300 animate-pulse" />
-          <span className="font-mono font-bold tracking-wider text-amber-100">{thaiTime.timeStr}</span>
+        {/* Real-time Badges: Cloud Firestore & Clock (Requirement #10) */}
+        <div className="flex items-center gap-2">
+          {/* Cloud Firestore Live Status */}
+          <div className="hidden sm:flex items-center gap-1.5 bg-black/25 backdrop-blur-xs px-2.5 py-1.5 rounded-lg border border-white/10 text-xs">
+            <span className="relative flex h-2 w-2">
+              <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${isFirebaseConnected ? 'bg-emerald-400' : 'bg-amber-400'}`} />
+              <span className={`relative inline-flex rounded-full h-2 w-2 ${isFirebaseConnected ? 'bg-emerald-500' : 'bg-amber-500'}`} />
+            </span>
+            <span className="text-amber-200 font-medium">
+              {isFirebaseConnected ? 'Cloud Firestore ออนไลน์' : 'กำลังเชื่อมต่อ Firestore...'}
+            </span>
+          </div>
+
+          <div className="flex items-center gap-2 bg-black/25 backdrop-blur-xs px-3 py-1.5 rounded-lg border border-white/10 text-xs sm:text-sm">
+            <CalendarIcon className="w-4 h-4 text-amber-300" />
+            <span className="font-semibold">{thaiTime.dateStr}</span>
+            <span className="text-amber-300/80">|</span>
+            <Clock className="w-4 h-4 text-amber-300 animate-pulse" />
+            <span className="font-mono font-bold tracking-wider text-amber-100">{thaiTime.timeStr}</span>
+          </div>
         </div>
       </div>
 

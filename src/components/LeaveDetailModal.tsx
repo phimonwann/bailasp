@@ -38,6 +38,11 @@ export const LeaveDetailModal: React.FC<LeaveDetailModalProps> = ({ leaveId, onC
     rejectLeaveRequest, 
     cancelLeaveRequest,
     updateLeaveRequest,
+    approveSupervisorStep,
+    approveInspectorStep,
+    approveDesignatedStep,
+    approveSuperintendentStep,
+    returnForRevision,
     users 
   } = useApp();
 
@@ -67,7 +72,9 @@ export const LeaveDetailModal: React.FC<LeaveDetailModalProps> = ({ leaveId, onC
   const canApprove = 
     currentUser?.role === 'admin' || 
     currentUser?.role === 'superintendent' || 
-    currentUser?.role === 'approver';
+    currentUser?.role === 'approver' ||
+    currentUser?.role === 'inspector' ||
+    currentUser?.role === 'supervisor';
 
   const handlePrint = () => {
     window.print();
@@ -181,82 +188,185 @@ export const LeaveDetailModal: React.FC<LeaveDetailModalProps> = ({ leaveId, onC
           {/* ===================== VIEW 1: INTERACTIVE TIMELINE & DETAIL ===================== */}
           {activeView === 'detail' && (
             <div className="space-y-6">
-              {/* Approval Timeline (Requirement #51) */}
+              {/* 7-Stage Approval Workflow Timeline (Requirement #1 to #7) */}
               <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
-                <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider mb-3 flex items-center gap-1.5">
-                  <Clock className="w-4 h-4 text-rose-800" />
-                  Timeline ขั้นตอนการอนุมัติใบลา (สภ.ศรีสงคราม)
-                </h4>
+                <div className="flex items-center justify-between mb-3">
+                  <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+                    <Clock className="w-4 h-4 text-rose-800" />
+                    ระบบขั้นตอนการอนุมัติใบลา 7 ลำดับขั้น (สภ.ศรีสงคราม)
+                  </h4>
+                  <span className="text-[11px] font-semibold text-rose-900 bg-rose-50 px-2 py-0.5 rounded border border-rose-200">
+                    {leave.status === 'pending_supervisor' && 'อยู่ระหว่าง: ขั้นตอนที่ 2 หัวหน้างานตรวจสอบ'}
+                    {(leave.status === 'pending_inspector' || leave.status === 'pending_inspection') && 'อยู่ระหว่าง: ขั้นตอนที่ 3 ผู้ตรวจสอบเอกสาร'}
+                    {(leave.status === 'pending_approver' || leave.status === 'pending_approval') && 'อยู่ระหว่าง: ขั้นตอนที่ 4 ผู้มีอำนาจอนุมัติ (รอง ผกก.)'}
+                    {leave.status === 'pending_superintendent' && 'อยู่ระหว่าง: ขั้นตอนที่ 5 คำสั่ง ผู้กำกับการ'}
+                    {leave.status === 'approved' && 'ขั้นตอนที่ 6-7: อนุมัติสมบูรณ์และบันทึกประวัติแล้ว'}
+                    {leave.status === 'rejected' && 'สถานะ: ไม่อนุมัติ'}
+                    {leave.status === 'revision' && 'สถานะ: ส่งกลับให้แก้ไข'}
+                    {leave.status === 'cancelled' && 'สถานะ: ยกเลิกคำขอแล้ว'}
+                  </span>
+                </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 relative">
-                  {/* Step 1: ยื่นคำขอ */}
-                  <div className="bg-white p-3 rounded-lg border border-slate-200 relative">
-                    <div className="flex items-center gap-1.5 text-emerald-600 text-xs font-bold">
-                      <CheckCircle2 className="w-4 h-4" />
-                      1. ยื่นคำขอในระบบ
+                <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2.5 relative">
+                  {/* Step 1: บุคลากรยื่นใบลา */}
+                  <div className="bg-white p-2.5 rounded-lg border border-emerald-300 shadow-2xs">
+                    <div className="flex items-center gap-1 text-emerald-700 text-[11px] font-bold">
+                      <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+                      1. ยื่นใบลา
                     </div>
-                    <div className="text-[11px] text-slate-700 mt-1 font-semibold leading-tight space-y-0.5">
-                      <div>ยศ: <span className="font-bold text-slate-900">{leave.userRank}</span></div>
-                      <div>ชื่อ-สกุล: <span className="font-bold text-slate-900">{leave.userFullName}</span></div>
+                    <div className="text-[10px] text-slate-700 mt-1 font-semibold truncate">
+                      {leave.userRank} {leave.userFullName}
                     </div>
-                    <div className="text-[10px] text-slate-400 mt-0.5">
-                      {new Date(leave.submittedAt).toLocaleString('th-TH')}
+                    <div className="text-[9px] text-slate-400 mt-0.5 truncate">
+                      {new Date(leave.submittedAt).toLocaleDateString('th-TH')}
                     </div>
                   </div>
 
-                  {/* Step 2: ตรวจสอบความถูกต้อง */}
-                  <div className={`p-3 rounded-lg border relative ${
-                    leave.status !== 'pending_inspection' ? 'bg-white border-slate-200' : 'bg-blue-50 border-blue-200'
-                  }`}>
-                    <div className="flex items-center gap-1.5 text-xs font-bold text-slate-800">
-                      {leave.inspectorDate ? <CheckCircle2 className="w-4 h-4 text-emerald-600" /> : <Clock className="w-4 h-4 text-amber-500" />}
-                      2. ตรวจสอบเอกสาร
-                    </div>
-                    <div className="text-[11px] text-slate-600 mt-1">
-                      {leave.inspectorName || `${stationConfig.inspectorRank} ${stationConfig.inspectorName}`}
-                    </div>
-                    <div className="text-[10px] text-slate-400 mt-0.5">
-                      {leave.inspectorDate ? formatThaiDate(leave.inspectorDate) : 'รอตรวจสอบ'}
-                    </div>
-                  </div>
-
-                  {/* Step 3: ความเห็นผู้บังคับบัญชา */}
-                  <div className={`p-3 rounded-lg border relative ${
-                    leave.supervisorDate ? 'bg-white border-slate-200' : 'bg-slate-50 border-slate-200'
-                  }`}>
-                    <div className="flex items-center gap-1.5 text-xs font-bold text-slate-800">
-                      {leave.supervisorDate ? <CheckCircle2 className="w-4 h-4 text-emerald-600" /> : <Clock className="w-4 h-4 text-slate-400" />}
-                      3. ความเห็นหัวหน้างาน
-                    </div>
-                    <div className="text-[11px] text-slate-600 mt-1">
-                      {leave.supervisorName || 'หัวหน้างาน/สารวัตร'}
-                    </div>
-                    <div className="text-[10px] text-slate-400 mt-0.5">
-                      {leave.supervisorDate ? formatThaiDate(leave.supervisorDate) : 'ตามขั้นตอน'}
-                    </div>
-                  </div>
-
-                  {/* Step 4: คำสั่ง ผกก. */}
-                  <div className={`p-3 rounded-lg border relative ${
-                    leave.status === 'approved' 
-                      ? 'bg-emerald-50 border-emerald-300' 
-                      : leave.status === 'rejected' 
-                      ? 'bg-rose-50 border-rose-300' 
+                  {/* Step 2: หัวหน้างานตรวจสอบ */}
+                  <div className={`p-2.5 rounded-lg border ${
+                    leave.status !== 'pending_supervisor' && leave.status !== 'revision'
+                      ? 'bg-white border-emerald-300'
+                      : leave.status === 'pending_supervisor'
+                      ? 'bg-amber-50 border-amber-400 ring-1 ring-amber-300'
                       : 'bg-slate-50 border-slate-200'
                   }`}>
-                    <div className="flex items-center gap-1.5 text-xs font-bold">
-                      {leave.status === 'approved' && <CheckCircle2 className="w-4 h-4 text-emerald-600" />}
-                      {leave.status === 'rejected' && <XCircle className="w-4 h-4 text-rose-600" />}
-                      {leave.status !== 'approved' && leave.status !== 'rejected' && <Clock className="w-4 h-4 text-slate-400" />}
-                      <span className={leave.status === 'approved' ? 'text-emerald-800' : leave.status === 'rejected' ? 'text-rose-800' : 'text-slate-800'}>
-                        4. คำสั่ง ผกก.
+                    <div className="flex items-center gap-1 text-[11px] font-bold">
+                      {leave.status !== 'pending_supervisor' && leave.status !== 'revision' ? (
+                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                      ) : (
+                        <Clock className="w-3.5 h-3.5 text-amber-600 shrink-0 animate-pulse" />
+                      )}
+                      <span className={leave.status === 'pending_supervisor' ? 'text-amber-900 font-extrabold' : 'text-slate-800'}>
+                        2. หน.งานตรวจ
                       </span>
                     </div>
-                    <div className="text-[11px] text-slate-700 mt-1 font-semibold">
-                      {leave.approverName || `${stationConfig.superintendentRank} ${stationConfig.superintendentName}`}
+                    <div className="text-[10px] text-slate-600 mt-1 truncate">
+                      {leave.supervisorName || 'สว.สายงาน'}
                     </div>
-                    <div className="text-[10px] text-slate-500 mt-0.5">
-                      {leave.status === 'approved' ? `อนุญาต (${formatThaiDate(leave.approverDate || '')})` : leave.status === 'rejected' ? 'ไม่อนุมัติ' : 'รอคำสั่ง'}
+                    <div className="text-[9px] text-slate-400 mt-0.5 truncate">
+                      {leave.supervisorDate ? formatThaiDate(leave.supervisorDate) : (leave.status === 'pending_supervisor' ? 'รอตรวจสอบ' : '-')}
+                    </div>
+                  </div>
+
+                  {/* Step 3: ผู้ตรวจสอบเอกสาร */}
+                  <div className={`p-2.5 rounded-lg border ${
+                    leave.status === 'pending_approver' || leave.status === 'pending_superintendent' || leave.status === 'approved'
+                      ? 'bg-white border-emerald-300'
+                      : leave.status === 'pending_inspector' || leave.status === 'pending_inspection'
+                      ? 'bg-blue-50 border-blue-400 ring-1 ring-blue-300'
+                      : 'bg-slate-50 border-slate-200'
+                  }`}>
+                    <div className="flex items-center gap-1 text-[11px] font-bold">
+                      {leave.inspectorDate || (leave.status === 'pending_approver' || leave.status === 'pending_superintendent' || leave.status === 'approved') ? (
+                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                      ) : (
+                        <Clock className="w-3.5 h-3.5 text-blue-500 shrink-0" />
+                      )}
+                      <span className={(leave.status === 'pending_inspector' || leave.status === 'pending_inspection') ? 'text-blue-900 font-extrabold' : 'text-slate-800'}>
+                        3. ตรวจเอกสาร
+                      </span>
+                    </div>
+                    <div className="text-[10px] text-slate-600 mt-1 truncate">
+                      {leave.inspectorName || `${stationConfig.inspectorRank} ${stationConfig.inspectorName}`}
+                    </div>
+                    <div className="text-[9px] text-slate-400 mt-0.5 truncate">
+                      {leave.inspectorDate ? formatThaiDate(leave.inspectorDate) : (leave.status === 'pending_inspector' ? 'รอตรวจ' : '-')}
+                    </div>
+                  </div>
+
+                  {/* Step 4: ผู้มีอำนาจอนุมัติ (รอง ผกก.) */}
+                  <div className={`p-2.5 rounded-lg border ${
+                    leave.status === 'pending_superintendent' || leave.status === 'approved'
+                      ? 'bg-white border-emerald-300'
+                      : (leave.status === 'pending_approver' || leave.status === 'pending_approval')
+                      ? 'bg-indigo-50 border-indigo-400 ring-1 ring-indigo-300'
+                      : 'bg-slate-50 border-slate-200'
+                  }`}>
+                    <div className="flex items-center gap-1 text-[11px] font-bold">
+                      {leave.designatedApproverDate || (leave.status === 'pending_superintendent' || leave.status === 'approved') ? (
+                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                      ) : (
+                        <Clock className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
+                      )}
+                      <span className={(leave.status === 'pending_approver' || leave.status === 'pending_approval') ? 'text-indigo-900 font-extrabold' : 'text-slate-800'}>
+                        4. มีอำนาจอนุมัติ
+                      </span>
+                    </div>
+                    <div className="text-[10px] text-slate-600 mt-1 truncate">
+                      {leave.designatedApproverName || 'รอง ผกก.'}
+                    </div>
+                    <div className="text-[9px] text-slate-400 mt-0.5 truncate">
+                      {leave.designatedApproverDate ? formatThaiDate(leave.designatedApproverDate) : '-'}
+                    </div>
+                  </div>
+
+                  {/* Step 5: ผู้กำกับ / ผู้อนุมัติที่กำหนด */}
+                  <div className={`p-2.5 rounded-lg border ${
+                    leave.status === 'approved'
+                      ? 'bg-white border-emerald-300'
+                      : leave.status === 'pending_superintendent'
+                      ? 'bg-purple-50 border-purple-400 ring-1 ring-purple-300'
+                      : 'bg-slate-50 border-slate-200'
+                  }`}>
+                    <div className="flex items-center gap-1 text-[11px] font-bold">
+                      {leave.status === 'approved' ? (
+                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                      ) : (
+                        <Clock className="w-3.5 h-3.5 text-purple-600 shrink-0" />
+                      )}
+                      <span className={leave.status === 'pending_superintendent' ? 'text-purple-900 font-extrabold' : 'text-slate-800'}>
+                        5. คำสั่ง ผกก.
+                      </span>
+                    </div>
+                    <div className="text-[10px] text-slate-600 mt-1 truncate">
+                      {leave.superintendentName || leave.approverName || `${stationConfig.superintendentRank} ${stationConfig.superintendentName}`}
+                    </div>
+                    <div className="text-[9px] text-slate-400 mt-0.5 truncate">
+                      {leave.approverDate ? formatThaiDate(leave.approverDate) : (leave.status === 'pending_superintendent' ? 'รอคำสั่ง' : '-')}
+                    </div>
+                  </div>
+
+                  {/* Step 6: อนุมัติสมบูรณ์ */}
+                  <div className={`p-2.5 rounded-lg border ${
+                    leave.status === 'approved'
+                      ? 'bg-emerald-50 border-emerald-300 text-emerald-900'
+                      : leave.status === 'rejected'
+                      ? 'bg-rose-50 border-rose-300 text-rose-800'
+                      : 'bg-slate-50 border-slate-200 text-slate-400'
+                  }`}>
+                    <div className="flex items-center gap-1 text-[11px] font-bold">
+                      {leave.status === 'approved' && <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />}
+                      {leave.status === 'rejected' && <XCircle className="w-3.5 h-3.5 text-rose-600 shrink-0" />}
+                      {leave.status !== 'approved' && leave.status !== 'rejected' && <span className="w-2 h-2 rounded-full bg-slate-300 inline-block shrink-0" />}
+                      <span>6. อนุมัติสมบูรณ์</span>
+                    </div>
+                    <div className="text-[10px] mt-1 font-semibold truncate">
+                      {leave.status === 'approved' ? '✓ อนุญาตตามระเบียบ' : leave.status === 'rejected' ? 'ไม่อนุมัติ' : 'รอคำสั่ง'}
+                    </div>
+                    <div className="text-[9px] text-slate-400 mt-0.5 truncate">
+                      {leave.status === 'approved' ? 'มีผลสมบูรณ์' : '-'}
+                    </div>
+                  </div>
+
+                  {/* Step 7: บันทึกประวัติ + แจ้งเตือน */}
+                  <div className={`p-2.5 rounded-lg border ${
+                    leave.status === 'approved'
+                      ? 'bg-emerald-50 border-emerald-300 text-emerald-900'
+                      : 'bg-slate-50 border-slate-200 text-slate-400'
+                  }`}>
+                    <div className="flex items-center gap-1 text-[11px] font-bold">
+                      {leave.status === 'approved' ? (
+                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                      ) : (
+                        <span className="w-2 h-2 rounded-full bg-slate-300 inline-block shrink-0" />
+                      )}
+                      <span>7. บันทึก+แจ้งเตือน</span>
+                    </div>
+                    <div className="text-[10px] mt-1 font-semibold truncate">
+                      {leave.status === 'approved' ? '✓ ตัดยอดวันลาแล้ว' : 'รอบันทึก'}
+                    </div>
+                    <div className="text-[9px] text-slate-400 mt-0.5 truncate">
+                      {leave.status === 'approved' ? 'ส่งแจ้งเตือนเรียบร้อย' : '-'}
                     </div>
                   </div>
                 </div>
@@ -359,21 +469,70 @@ export const LeaveDetailModal: React.FC<LeaveDetailModalProps> = ({ leaveId, onC
                   )}
                 </div>
 
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   {leave.status !== 'approved' && leave.status !== 'cancelled' && canApprove && (
                     <>
+                      {/* Step 2 action: Supervisor review */}
+                      {leave.status === 'pending_supervisor' && (
+                        <button
+                          onClick={() => approveSupervisorStep(leave.id)}
+                          className="px-3.5 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm flex items-center gap-1.5 cursor-pointer"
+                        >
+                          <CheckCircle2 className="w-4 h-4" />
+                          <span>หน.งานเห็นชอบ (ส่งขั้น 3 ตรวจเอกสาร)</span>
+                        </button>
+                      )}
+
+                      {/* Step 3 action: Inspector review */}
+                      {(leave.status === 'pending_inspector' || leave.status === 'pending_inspection') && (
+                        <button
+                          onClick={() => approveInspectorStep(leave.id)}
+                          className="px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm flex items-center gap-1.5 cursor-pointer"
+                        >
+                          <CheckCircle2 className="w-4 h-4" />
+                          <span>ตรวจเอกสารผ่าน (ส่งขั้น 4 ผู้มีอำนาจ)</span>
+                        </button>
+                      )}
+
+                      {/* Step 4 action: Designated approver review */}
+                      {(leave.status === 'pending_approver' || leave.status === 'pending_approval') && (
+                        <button
+                          onClick={() => approveDesignatedStep(leave.id)}
+                          className="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm flex items-center gap-1.5 cursor-pointer"
+                        >
+                          <CheckCircle2 className="w-4 h-4" />
+                          <span>ผู้มีอำนาจเห็นชอบ (เสนอ ผกก. ขั้น 5)</span>
+                        </button>
+                      )}
+
+                      {/* Step 5 action: Superintendent final order */}
+                      {leave.status === 'pending_superintendent' && (
+                        <button
+                          onClick={() => approveSuperintendentStep(leave.id)}
+                          className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm flex items-center gap-1.5 cursor-pointer"
+                        >
+                          <CheckCircle2 className="w-4 h-4" />
+                          <span>คำสั่ง ผกก. อนุญาต (ขั้น 6-7 อนุมัติสมบูรณ์)</span>
+                        </button>
+                      )}
+
+                      {/* Admin / Superintendent Fast-track button */}
+                      {(currentUser?.role === 'admin' || currentUser?.role === 'superintendent') && leave.status !== 'pending_superintendent' && (
+                        <button
+                          onClick={() => approveLeaveRequest(leave.id)}
+                          className="px-3 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-xl text-xs font-bold transition-all flex items-center gap-1 cursor-pointer"
+                          title="อนุมัติผ่านทุกขั้นตอนทันที (Fast Track)"
+                        >
+                          <span>⚡ อนุมัติทันที (Fast Track)</span>
+                        </button>
+                      )}
+
                       <button
                         onClick={() => setShowRejectPrompt(true)}
-                        className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-colors cursor-pointer"
+                        className="px-3.5 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-xl text-xs font-bold transition-colors flex items-center gap-1 cursor-pointer"
                       >
+                        <XCircle className="w-4 h-4" />
                         ไม่อนุมัติ
-                      </button>
-                      <button
-                        onClick={() => approveLeaveRequest(leave.id)}
-                        className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm flex items-center gap-1.5 cursor-pointer"
-                      >
-                        <CheckCircle2 className="w-4 h-4" />
-                        อนุมัติใบลา
                       </button>
                     </>
                   )}

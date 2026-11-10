@@ -42,6 +42,21 @@ export const PersonnelManagement: React.FC = () => {
   // Show/Hide passwords toggle for Admin (Requirement #7)
   const [showPasswords, setShowPasswords] = useState(false);
 
+  // User Requirement: ข้อมูลบุคลากรให้เห็นเฉพาะแอดมินเท่านั้น
+  if (currentUser?.role !== 'admin') {
+    return (
+      <div className="bg-white rounded-2xl border border-rose-200 p-8 text-center space-y-3">
+        <div className="w-12 h-12 bg-rose-50 text-rose-800 rounded-full flex items-center justify-center mx-auto text-xl font-bold">
+          <Shield className="w-6 h-6 text-rose-700" />
+        </div>
+        <h3 className="text-base font-bold text-slate-800">ไม่มีสิทธิ์เข้าถึงข้อมูลบุคลากร</h3>
+        <p className="text-xs text-slate-500">
+          ระบบจำกัดสิทธิ์การดูและแก้ไขข้อมูลบุคลากรเฉพาะผู้ดูแลระบบ (Admin) เท่านั้น
+        </p>
+      </div>
+    );
+  }
+
   // Add/Edit modal state
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingUserId, setEditingUserId] = useState<string | null>(null);
