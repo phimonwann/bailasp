@@ -95,7 +95,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     },
     {
       id: 'schedule_board' as ActiveTab,
-      label: 'แผงการลาประจำเดือน',
+      label: 'แผงการลาข้าราชการตำรวจ',
       icon: Grid3X3,
       badge: null,
     },
@@ -131,18 +131,25 @@ export const Sidebar: React.FC<SidebarProps> = ({
     },
   ];
 
-  // User Requirement: ข้อมูลบุคลากรให้เห็นเฉพาะแอดมินเท่านั้น และปรับปรุงสิทธิ์ใหม่ให้สมบูรณ์
+  // User Requirement: สิทธิ์บุคลากร ให้เห็นเฉพาะ หน้า 1.Dashboard 2.ยื่นใบลาออนไลน์ เท่านั้น
+  const isPersonnel = currentUser?.role === 'officer' || (currentUser?.role as string) === 'personnel';
+
   const filteredNavItems = navItems.filter((item) => {
-    // 1. ข้อมูลบุคลากร: ให้เห็นเฉพาะแอดมินเท่านั้น
+    // สิทธิ์บุคลากร: ให้เห็นเฉพาะ หน้า 1.Dashboard 2.ยื่นใบลาออนไลน์ เท่านั้น
+    if (isPersonnel) {
+      return item.id === 'dashboard' || item.id === 'create_leave';
+    }
+
+    // ข้อมูลบุคลากร: ให้เห็นเฉพาะแอดมินเท่านั้น
     if (item.id === 'personnel' && currentUser?.role !== 'admin') {
       return false;
     }
-    // 2. กล่องงานอนุมัติ: ไม่แสดงให้บุคลากรทั่วไป (officer) ที่ไม่มีอำนาจอนุมัติ
-    if (item.id === 'approvals' && currentUser?.role === 'officer') {
+    // ประวัติการใช้งานระบบ (Audit Logs): เฉพาะ admin และผู้กำกับ
+    if (item.id === 'audit_logs' && currentUser?.role !== 'admin' && currentUser?.role !== 'superintendent') {
       return false;
     }
-    // 3. ประวัติการใช้งานระบบ (Audit Logs): เฉพาะ admin และผู้กำกับ
-    if (item.id === 'audit_logs' && currentUser?.role !== 'admin' && currentUser?.role !== 'superintendent') {
+    // ตั้งค่าระบบ: เฉพาะแอดมินเท่านั้น
+    if (item.id === 'settings' && currentUser?.role !== 'admin') {
       return false;
     }
     return true;

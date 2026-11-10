@@ -8,12 +8,9 @@ import { useApp } from '../context/AppContext';
 import {
   Lock,
   User,
-  Shield,
   Key,
   AlertTriangle,
-  CheckCircle2,
   X,
-  Sparkles,
 } from 'lucide-react';
 
 interface LoginModalProps {
@@ -47,20 +44,6 @@ export const LoginModal: React.FC<LoginModalProps> = ({
     }
 
     const res = login(credential.trim(), password.trim());
-    if (res.success) {
-      if (res.requirePasswordChange) {
-        onRequirePasswordChange();
-      }
-      onClose();
-    } else {
-      setErrorMsg(res.message || 'ข้อมูลเข้าสู่ระบบไม่ถูกต้อง');
-    }
-  };
-
-  const handleQuickLogin = (cred: string, pass: string) => {
-    setCredential(cred);
-    setPassword(pass);
-    const res = login(cred, pass);
     if (res.success) {
       if (res.requirePasswordChange) {
         onRequirePasswordChange();
@@ -152,77 +135,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({
           <span>เข้าสู่ระบบ (Sign In)</span>
         </button>
 
-        {/* Quick Demo Logins for instant testing of all 6 roles */}
-        <div className="pt-4 border-t border-slate-200">
-          <p className="font-bold text-slate-600 mb-2 flex items-center justify-between">
-            <span className="flex items-center gap-1.5 text-xs">
-              <Sparkles className="w-3.5 h-3.5 text-amber-500" />
-              กดเพื่อทดสอบสิทธิ์ในระบบ 6 ระดับ (Quick Demo Login)
-            </span>
-            <span className="text-[10px] text-slate-400 font-normal">คลิกเพื่อเข้าใช้งานทันที</span>
-          </p>
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-[11px]">
-            {/* 1. Admin */}
-            <button
-              type="button"
-              onClick={() => handleQuickLogin('admin', 'admin1234')}
-              className="p-2.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-900 border border-rose-200 text-left transition-all hover:shadow-xs cursor-pointer"
-            >
-              <div className="font-bold flex items-center gap-1">⚙️ แอดมิน (Admin)</div>
-              <div className="text-[10px] text-slate-500 truncate">จัดการบุคลากร/ระบบ</div>
-            </button>
 
-            {/* 2. Superintendent */}
-            <button
-              type="button"
-              onClick={() => handleQuickLogin('SSK1', 'SSK1')}
-              className="p-2.5 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 text-left transition-all hover:shadow-xs cursor-pointer"
-            >
-              <div className="font-bold flex items-center gap-1">⭐ ผู้กำกับ (ผกก.)</div>
-              <div className="text-[10px] text-slate-500 truncate">พ.ต.อ. ถวิล (SSK1)</div>
-            </button>
-
-            {/* 3. Approver */}
-            <button
-              type="button"
-              onClick={() => handleQuickLogin('SSK2', 'SSK2')}
-              className="p-2.5 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-900 border border-blue-200 text-left transition-all hover:shadow-xs cursor-pointer"
-            >
-              <div className="font-bold flex items-center gap-1">✍️ ผู้อนุมัติ (รอง ผกก.)</div>
-              <div className="text-[10px] text-slate-500 truncate">พ.ต.ท. สมนึก (SSK2)</div>
-            </button>
-
-            {/* 4. Inspector */}
-            <button
-              type="button"
-              onClick={() => handleQuickLogin('SSK3', 'SSK3')}
-              className="p-2.5 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-900 border border-indigo-200 text-left transition-all hover:shadow-xs cursor-pointer"
-            >
-              <div className="font-bold flex items-center gap-1">📋 ผู้ตรวจสอบ</div>
-              <div className="text-[10px] text-slate-500 truncate">ตรวจเอกสาร/สิทธิการลา</div>
-            </button>
-
-            {/* 5. Supervisor */}
-            <button
-              type="button"
-              onClick={() => handleQuickLogin('SSK4', 'SSK4')}
-              className="p-2.5 rounded-xl bg-purple-50 hover:bg-purple-100 text-purple-900 border border-purple-200 text-left transition-all hover:shadow-xs cursor-pointer"
-            >
-              <div className="font-bold flex items-center gap-1">👮‍♂️ หัวหน้างาน</div>
-              <div className="text-[10px] text-slate-500 truncate">สว.สายงาน (ความเห็น)</div>
-            </button>
-
-            {/* 6. Officer */}
-            <button
-              type="button"
-              onClick={() => handleQuickLogin('SSK503', 'SSK503')}
-              className="p-2.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-900 border border-emerald-200 text-left transition-all hover:shadow-xs cursor-pointer"
-            >
-              <div className="font-bold flex items-center gap-1">👮 บุคลากร (ผู้ยื่นลา)</div>
-              <div className="text-[10px] text-slate-500 truncate">ส.ต.ท. นัฐพงษ์ (503)</div>
-            </button>
-          </div>
-        </div>
       </form>
     </div>
   );
