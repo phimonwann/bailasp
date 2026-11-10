@@ -1,0 +1,26 @@
+{
+  "id": "/",
+  "name": "ระบบลาออนไลน์ สภ.ศรีสงคราม",
+  "short_name": "สภ.ศรีสงคราม",
+  "description": "ระบบบริหารจัดการการลาออนไลน์ สถานีตำรวจภูธรศรีสงคราม จังหวัดนครพนม",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#721319",
+  "theme_color": "#721319",
+  "icons": [
+    {
+      "src": "/assets/aistudio/att.TGdvWeI4dBEqtfWEtx0TjY1ya3T8Gl5qxlKsxDfGhFs_4c676f59.jpeg",
+      "sizes": "192x192",
+      "type": "image/jpeg",
+      "purpose": "any"
+    },
+    {
+      "src": "/assets/aistudio/att.TGdvWeI4dBEqtfWEtx0TjY1ya3T8Gl5qxlKsxDfGhFs_4c676f59.jpeg",
+      "sizes": "512x512",
+      "type": "image/jpeg",
+      "purpose": "any"
+    }
+  ]
+}
